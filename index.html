@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Transcribe</title>
+<style>
+  :root { --bg:#f6f5f2; --fg:#1d1d1f; --card:#fff; --line:#d9d6cf; --accent:#1f4e79; --muted:#666; --bad:#c0392b; --note:#eef3f8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1b1b1d; --fg:#ececec; --card:#26262a; --line:#3a3a40; --accent:#6aa9e0; --muted:#9a9aa0; --bad:#ef7b6e; --note:#20262d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:1.6rem; margin:0 0 4px; }
+  h2 { font-size:1.2rem; margin:0 0 6px; }
+  .sub { color:var(--muted); margin:0 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px; }
+  .num { display:inline-block; background:var(--accent); color:#fff; border-radius:50%; width:28px; height:28px; text-align:center; line-height:28px; font-weight:700; margin-right:8px; }
+  .note { background:var(--note); border-radius:8px; padding:10px 12px; margin:10px 0; font-size:.95rem; }
+  .privacy { border-left:4px solid var(--accent); }
+  .zone { border:2px dashed var(--line); border-radius:10px; padding:22px 12px; text-align:center; cursor:pointer; margin-top:12px; }
+  .zone.over { border-color:var(--accent); background:var(--note); }
+  .zone input { display:none; }
+  .zone .nm { font-weight:600; margin-top:6px; word-break:break-all; }
+  label.check { display:flex; gap:8px; align-items:center; margin:10px 0 0; }
+  label.lbl { display:block; font-weight:600; margin:12px 0 4px; }
+  select, input[type=text] { padding:8px; font:inherit; color:inherit; background:transparent; border:1px solid var(--line); border-radius:6px; }
+  button { padding:10px 18px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:6px; cursor:pointer; margin-top:14px; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.alt { background:transparent; color:var(--accent); border:1px solid var(--accent); margin-right:8px; }
+  .bar { height:12px; background:var(--line); border-radius:6px; overflow:hidden; margin-top:14px; display:none; }
+  .bar > div { height:100%; width:0; background:var(--accent); transition:width .3s; }
+  .status { margin-top:8px; color:var(--muted); }
+  .err { margin-top:8px; color:var(--bad); }
+  .cmd { display:none; background:#111; color:#9be29b; border-radius:8px; padding:10px 12px; margin-top:10px; overflow-x:auto; white-space:pre; font:.88rem ui-monospace, Menlo, Consolas, monospace; }
+  .result { display:none; margin-top:12px; }
+  audio { width:100%; margin-top:6px; }
+  pre.md { background:var(--note); border-radius:8px; padding:12px; white-space:pre-wrap; max-height:380px; overflow:auto; font:.88rem ui-monospace, Menlo, Consolas, monospace; margin-top:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Audio Transcribe</h1>
+  <p class="sub">Turn a video into audio, then audio into a written Markdown transcript with speaker labels.</p>
+  <div class="note privacy"><b>Your files stay on your computer.</b> Everything runs inside this browser tab. Your video and audio are never uploaded. (The page does download the program and the speech models it needs, which are not your files.) Use Chrome or Edge on a computer. <span id="gpu"></span></div>
+
+  <section class="card">
+    <h2><span class="num">1</span>Video to audio</h2>
+    <div class="note"><b>What this does:</b> A video file holds pictures and sound together. Step 1 keeps only the sound and saves it as a WAV file, which is plain, uncompressed audio that speech software can read. The tool that does it is called <b>ffmpeg</b>. Your video is not changed; this makes a new file.</div>
+    <label class="zone" id="zone1"><input type="file" id="file1" accept="video/*,.mp4,.mov,.avi,.mkv,.wmv,.m4v"><div>Drop a video here, or click to choose one</div><div class="nm" id="name1"></div></label>
+    <button id="go1" disabled>Convert to audio</button>
+    <div class="bar" id="bar1"><div></div></div>
+    <div class="status" id="st1"></div>
+    <div class="cmd" id="cmd1"></div>
+    <div class="result" id="res1">
+      <audio id="aud1" controls></audio>
+      <button class="alt" id="dl1">Download the WAV file</button><button class="alt" id="use2">Use this audio in Step 2</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">2</span>Audio to a Markdown transcript</h2>
+    <div class="note"><b>What this does:</b> A speech-recognition model (Whisper) listens and types out the words with time stamps. A second pair of models listens for changes in voice and labels who is speaking (Speaker 1, Speaker 2). The result is a <b>Markdown</b> file: plain text that any AI tool or word processor can open. The labels are guesses; always check them against the recording.</div>
+    <label class="zone" id="zone2"><input type="file" id="file2" accept="audio/*,video/*,.wav,.mp3,.m4a,.mp4,.mov"><div>Drop an audio file here (WAV, MP3, M4A), or click to choose one</div><div class="nm" id="name2"></div></label>
+    <label class="lbl" for="model">Accuracy</label>
+    <select id="model">
+      <option value="base.en">Faster (base model, about 150 MB first download)</option>
+      <option value="small.en">More accurate, slower (small model, about 600 MB first download)</option>
+    </select>
+    <label class="check"><input id="spk" type="checkbox" checked> Label who is speaking</label>
+    <label class="lbl" for="nspk">Number of speakers (blank = detect automatically)</label>
+    <input id="nspk" type="text" placeholder="e.g. 2" style="width:140px">
+    <div><button id="go2" disabled>Make the transcript</button></div>
+    <div class="bar" id="bar2"><div></div></div>
+    <div class="status" id="st2"></div>
+    <div class="result" id="res2">
+      <button class="alt" id="dl2">Download Markdown (.md)</button><button class="alt" id="copy2">Copy to clipboard</button>
+      <pre class="md" id="md"></pre>
+    </div>
+  </section>
+  <p class="sub">Transcripts are machine drafts. Verify against the recording before relying on them. Browser limits: video files up to about 1.5 GB and recordings up to 40 minutes.</p>
+</main>
+<script src="vendor/ffmpeg/ffmpeg.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
